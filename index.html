@@ -148,6 +148,14 @@ body{min-height:100vh;overflow-x:hidden;display:flex;justify-content:center;alig
 .master.show .orbit .core{animation:kpop 1.3s .4s cubic-bezier(.2,1.4,.3,1) backwards,flo 4s 1.7s ease-in-out infinite}
 @keyframes kpop{from{opacity:0;transform:scale(.2) rotate(-120deg)}}
 .hexk{animation:spin 30s linear infinite;transform-origin:0 0}
+/* ===== ID THIẾT BỊ ===== */
+.hwrow{display:flex;align-items:center;gap:10px;background:rgba(40,16,80,.45);border:1px solid rgba(184,107,255,.35);border-radius:12px;padding:6px 14px;transition:.3s}
+.hwrow label{font-size:10px;letter-spacing:.15em;color:#cfa8ff;white-space:nowrap}
+.hwrow input{flex:1;min-width:0;background:none;border:0;outline:0;color:#fff;font:700 17px ui-monospace,Consolas,monospace;letter-spacing:.25em;text-transform:uppercase;text-align:right}
+.hwrow input::placeholder{font-size:11px;letter-spacing:.05em;color:#7a5aa8;font-weight:400}
+.hwrow:focus-within{border-color:var(--c);box-shadow:0 0 14px rgba(184,107,255,.4)}
+.hwrow.bad{border-color:#ff5a78;animation:shk .4s}
+@keyframes shk{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 /* ===== LÀM ĐẸP ===== */
 body,.info,.head,.btn,.title,.badge,.st,#toast,.brand{font-family:'Segoe UI',system-ui,-apple-system,Roboto,sans-serif}
 .term,.ll,.key,.hist,.boot,.hn span{font-family:ui-monospace,'SF Mono',Consolas,'Courier New',monospace}
@@ -321,12 +329,14 @@ html.lite .aurora{filter:none}
       <div id="logs"></div>
       <div class="ll"><span id="typing">Sẵn sàng nhận diện thiết bị...</span><span class="cur"></span></div>
     </div>
+    <div class="hwrow" id="hwrow"><label for="hw">ID THIẾT BỊ</label><input id="hw" maxlength="7" placeholder="Lấy trong bảng game" autocomplete="off" spellcheck="false"></div>
     <button class="btn" id="go" onclick="startExecution()">Bắt đầu lấy key</button>
     <div class="vault" id="vault">
       <div style="font-size:12px">&gt; KEY CỦA BẠN ĐÃ SẴN SÀNG &lt;</div>
       <div class="key" id="finalKey">-</div>
       <div class="row">
         <button class="btn" onclick="copyKey()">Sao chép</button>
+        <button class="btn" onclick="copyLoader()">Script</button>
         <button class="btn" style="background:#33002c;border-color:#ff00dd;color:#d400ff" onclick="toast('Đã chuyển hướng Discord!')">Discord</button>
       </div>
       <div class="hist" id="hist"></div>
@@ -452,6 +462,7 @@ function typeFx(text,speed,cb){
   },speed);
 }
 function startExecution(){
+  if(!validHw(getHw())){const r=$('hwrow');r.classList.remove('bad');void r.offsetWidth;r.classList.add('bad');$('hw').focus();toast('Nhập ID thiết bị (7 ký tự) lấy từ bảng trong game');return}
   go.disabled=true;logs.innerHTML='';setStep(1);
   addLog('Khởi tạo giao thức bảo mật...','wn');
   typeFx('Đang lấy HWID thiết bị (Android/PC)...',30,()=>{
@@ -467,8 +478,8 @@ function startExecution(){
             addLog('Bypass xác thực thành công!','ok');
             typeFx('Đang sinh key mã hóa SHA-256...',30,()=>{
               setStep(3);
-              const k='LRZ-'+Math.random().toString(36).substring(2,12).toUpperCase()+'-VIP';
-              $('finalKey').textContent=k;saveKey(k);
+              const k=genKey(getHw());
+              $('finalKey').textContent=k;saveKey(k);autoCopy(k);
               go.style.display='none';$('vault').style.display='block';
             });
           }
@@ -478,6 +489,32 @@ function startExecution(){
   });
 }
 
+/* ===== KEY CHUNG VỚI loader.lua ===== */
+const SALT='CHANGE_ME_LRZ';                          // PHẢI GIỐNG SALT trong loader.lua
+const LOADER_URL='https://your-site.com/loader.lua'; // link raw của loader.lua
+function h32(str){let h=5381;for(let r=0;r<2;r++)for(let i=0;i<str.length;i++)h=(h*33+str.charCodeAt(i)+r)>>>0;return h}
+const b36=(n,l)=>n.toString(36).toUpperCase().padStart(l,'0');
+function getHw(){return ($('hw').value||'').trim().toUpperCase()}
+const validHw=h=>/^[0-9A-Z]{7}$/.test(h);
+function genKey(hw){   // key gắn với ID thiết bị: máy khác dùng sẽ báo sai
+  const ts=b36(Math.floor(Date.now()/60000),5),rnd=b36(Math.floor(Math.random()*1679616),4);
+  return `LRZ-${ts}${rnd}-${b36(h32(ts+rnd+hw+SALT)%60466176,5)}`;
+}
+(function(){ // tự điền ID từ link ?hwid=... hoặc lần trước
+  let v=new URLSearchParams(location.search).get('hwid');
+  try{v=v||localStorage.getItem('lrz_hw')}catch(e){}
+  if(v)$('hw').value=String(v).toUpperCase().slice(0,7);
+  $('hw').addEventListener('input',e=>{e.target.value=e.target.value.toUpperCase().replace(/[^0-9A-Z]/g,'');try{localStorage.setItem('lrz_hw',e.target.value)}catch(_){}});
+})();
+function autoCopy(k){
+  try{navigator.clipboard.writeText(k).then(()=>toast('Đã tự động sao chép key!')).catch(()=>{})}catch(e){}
+}
+function copyLoader(){
+  const t=`loadstring(game:HttpGet("${LOADER_URL}"))()`;
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject())
+    .then(()=>toast('Đã sao chép script! Dán vào Delta Executor.'))
+    .catch(()=>toast('Không sao chép được, hãy copy thủ công.'));
+}
 /* ===== 5. KHO KEY (lưu 24h trên máy) ===== */
 function saveKey(k){
   try{
